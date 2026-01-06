@@ -1,27 +1,47 @@
 import { z } from "zod";
 
-export const studentSchema = z.object({
-  firstName: z.string().min(2, "First name is required"),
-  lastName: z.string().min(2, "Last name is required"),
+export const studentSchema = z
+  .object({
+    firstName: z.string().min(2, { message: "First name is required" }),
+    lastName: z.string().min(2, { message: "Last name is required" }),
 
-  email: z
-    .string()
-    .min(1, { message: "Email is required" })
-    .email({ message: "Invalid email address" }),
+    email: z
+      .string()
+      .min(1, { message: "Email is required" })
+      .email({ message: "Invalid email address" }),
 
-  mobile: z.string().regex(/^[6-9]\d{9}$/, "Invalid Indian mobile number"),
+    mobile: z
+      .string()
+      .regex(/^[6-9]\d{9}$/, { message: "Invalid Indian mobile number" }),
 
-  dob: z.string().min(1, "Date of birth is required"),
+    dob: z.string().min(1, { message: "Date of birth is required" }),
 
-  gender: z.enum(["male", "female", "other"]),
+    password: z
+      .string()
+      .min(8, { message: "Password must be at least 8 characters" }),
 
-  course: z.string().min(1, "Please select a course"),
+    confirmPassword: z.string(),
 
-  address: z.string().min(10, "Address must be at least 10 characters"),
+    gender: z.enum(["male", "female", "other"]),
 
-  terms: z.literal(true).refine(() => true, {
-    message: "You must accept terms",
-  }),
+    course: z.string().min(1, { message: "Please select a course" }),
+
+    address: z
+      .string()
+      .min(10, { message: "Address must be at least 10 characters" }),
+
+    terms: z.literal(true).refine(() => true, {
+      message: "You must accept terms",
+    }),
+  })
+  .superRefine((data, ctx) => {
+  if (data.password !== data.confirmPassword) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["confirmPassword"],
+      message: "Passwords do not match",
+    });
+  }
 });
 
 export type StudentFormData = z.infer<typeof studentSchema>;

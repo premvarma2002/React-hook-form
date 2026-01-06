@@ -2,19 +2,64 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { studentSchema } from "../schemas/student.schema";
 import type { StudentFormData } from "../schemas/student.schema";
+import { createStudent } from "../services/student.service";
+import { useNavigate } from "react-router-dom";
+import { supabase } from "../lib/supabase";
 
 export default function StudentForm() {
+  const navigate = useNavigate();
   const {
     register,
     handleSubmit,
-    formState: { errors },
+    formState: { errors, isSubmitting },
   } = useForm<StudentFormData>({
     resolver: zodResolver(studentSchema),
   });
 
-  const onSubmit = (data: StudentFormData) => {
-    console.log("Student Data:", data);
-  };
+ const onSubmit = async (values: StudentFormData) => {
+  try {
+    // 1️⃣ Signup user
+    const { error: signUpError } = await supabase.auth.signUp({
+      email: values.email,
+      password: values.password,
+    });
+
+    if (signUpError) {
+      throw signUpError;
+    }
+
+    // 2️⃣ EXPLICIT LOGIN (THIS IS THE MISSING PIECE)
+    const { data: loginData, error: loginError } =
+      await supabase.auth.signInWithPassword({
+        email: values.email,
+        password: values.password,
+      });
+
+    if (loginError) {
+      throw loginError;
+    }
+
+    const sessionUser = loginData.user;
+
+    if (!sessionUser) {
+      throw new Error("Session not created");
+    }
+
+    // 3️⃣ Insert student (RLS WILL PASS NOW)
+    await createStudent(sessionUser.id, values);
+
+    alert("Student registered successfully!");
+    navigate("/login");
+  } catch (err: unknown) {
+    console.error("Signup error:", err);
+
+    if (err instanceof Error) {
+      alert(err.message);
+    } else {
+      alert("Something went wrong");
+    }
+  }
+};
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-indigo-600 to-cyan-500 p-6">
@@ -22,7 +67,9 @@ export default function StudentForm() {
         <h2 className="form-title mb-8">Create Student</h2>
 
         <form
-          onSubmit={handleSubmit(onSubmit)}
+          onSubmit={handleSubmit(onSubmit, (errors) =>
+            console.log("Validation errors:", errors)
+          )}
           className="grid grid-cols-1 md:grid-cols-2 gap-6"
         >
           {/* First Name */}
@@ -44,6 +91,26 @@ export default function StudentForm() {
             <label className="label">Email</label>
             <input {...register("email")} className="input" />
             <p className="error">{errors.email?.message}</p>
+          </div>
+
+          <div>
+            <label className="label">Password</label>
+            <input
+              type="password"
+              {...register("password")}
+              className="input"
+            />
+            <p className="error">{errors.password?.message}</p>
+          </div>
+
+          <div>
+            <label className="label">Confirm Password</label>
+            <input
+              type="password"
+              {...register("confirmPassword")}
+              className="input"
+            />
+            <p className="error">{errors.confirmPassword?.message}</p>
           </div>
 
           {/* Mobile */}
@@ -106,8 +173,12 @@ export default function StudentForm() {
 
           {/* Submit */}
           <div className="md:col-span-2">
-            <button type="submit" className="submit-btn">
-              Create Student
+            <button
+              type="submit"
+              className="submit-btn"
+              disabled={isSubmitting}
+            >
+              {isSubmitting ? "Creating..." : "Create Student"}
             </button>
           </div>
         </form>
